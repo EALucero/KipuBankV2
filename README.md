@@ -29,6 +29,8 @@ KipuBankV2 es un contrato inteligente que permite a los usuarios depositar y ret
 
 ## ☝🏼 Como interactuar
 
+IMPORTANTE: Los depósitos deben aprobarse primero desde IERC20, luego pueden ejecutarse desde KipuBankV2 (con un valor dentro del 1er monto).
+
 - Usá deposit(token, amount) para depositar ETH (address(0)) o USDC.
 - Usá withdraw(token, amount) para retirar dentro del límite permitido.
 - Consultá tu bóveda con getVaultBalance(user, token).
@@ -36,17 +38,17 @@ KipuBankV2 es un contrato inteligente que permite a los usuarios depositar y ret
 - Consultá estadísticas globales con getStats().
 
 ## 🔍 Variables clave
-- vaults[user][token]: Monto depositado por usuario y token
-- totalDeposits: Total acumulado de depósitos en USD
-- totalWithdrawals: Total acumulado de retiros en USD
-- bankCapUSD: Límite global de depósitos
-- withdrawalLimitUSD: Límite máximo por retiro
-- tokenDecimals[token]: Decimales configurados por token
-- ethUsdPriceFeed: Oráculo Chainlink ETH/USD (Sepolia)
-- USDC: Dirección del contrato USDC en Sepolia
-- FEED: Dirección del oráculo Chainlink ETH/USD
-- ORACLE_HEARTBEAT: Latido máximo del oráculo (3600 segundos)
-- DECIMAL_FACTOR: Factor de precisión para cálculos con decimales
+- vaults[user][token]:      Monto depositado por usuario y token
+- totalDeposits:            Total acumulado de depósitos en USD
+- totalWithdrawals:         Total acumulado de retiros en USD
+- bankCapUSD:               Límite global de depósitos
+- withdrawalLimitUSD:       Límite máximo por retiro
+- tokenDecimals[token]:     Decimales configurados por token
+- ethUsdPriceFeed:          Oráculo Chainlink ETH/USD (Sepolia)
+- USDC:                     Dirección del contrato USDC en Sepolia
+- FEED:                     Dirección del oráculo Chainlink ETH/USD
+- ORACLE_HEARTBEAT:         Latido máximo del oráculo (3600 segundos)
+- DECIMAL_FACTOR:           Factor de precisión para cálculos con decimales
 
 ## ✅ Verificación de contrato
-https://sepolia.etherscan.io/address/0x99fbd0638a8c8a07cc511f52ca2cd74dd03549e4
+https://sepolia.etherscan.io/address/0x9f9f1678dF0c37c6387A68aC7BDb7F4Ff7F7F5B7
