@@ -3,6 +3,7 @@ pragma solidity 0.8.27;
 
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 
 /**
@@ -46,8 +47,6 @@ contract KipuBankV2 is AccessControl {
     uint256 public totalDeposits;
     /// @notice Total de retiros realizados
     uint256 public totalWithdrawals;
-    /// @notice Centinela para prevenir reentrancia
-    bool private locked;
 
     // ─────── EVENTOS ─────── //
     /// @notice Emitido cuando un usuario deposita fondos
@@ -73,15 +72,6 @@ contract KipuBankV2 is AccessControl {
     /// @notice El dato del oráculo está desactualizado o es inválido según el heartbeat configurado
     error StaleOracleData();
 
-    // ─────── MODIFICADORES ─────── //
-    /// @notice Guardia que previene reentrancia en funciones críticas
-    modifier nonReentrant() {
-        require(!locked, "ReentrancyGuard: reentrant call");
-        locked = true;
-        _;
-        locked = false;
-    }
-
     // ─────── CONSTRUCTOR ─────── //
     /**
      * @notice Inicializa el contrato con límites y roles
@@ -106,7 +96,7 @@ contract KipuBankV2 is AccessControl {
     /// @notice Permite depositar ETH directamente
     receive() external payable {
         if (msg.value == 0) revert ZeroAmount();
-        _deposit(NATIVE_TOKEN, msg.value);
+        _deposit(msg.sender, NATIVE_TOKEN, msg.value);
     }
 
     /**
@@ -114,29 +104,23 @@ contract KipuBankV2 is AccessControl {
      * @param token Dirección del token a depositar (ETH usa address(0))
      * @param amount Monto a depositar
      */
-    function deposit(address token, uint256 amount) external payable {
+    function deposit(address token, uint256 amount) external payable nonReentrant {
         if (amount == 0) revert ZeroAmount();
-        if (token == NATIVE_TOKEN) {
-            require(msg.value == amount, "ETH mismatch");
-        } else {
-            uint256 allowance = IERC20(token).allowance(msg.sender, address(this));
-            if (allowance < amount) revert InsufficientAllowance();
-            IERC20(token).transferFrom(msg.sender, address(this), amount);
-        }
-        _deposit(token, amount);
-    }
 
-    /**
-     * @notice Lógica interna para registrar depósitos
-     * @param token Dirección del token depositado
-     * @param amount Monto depositado
-     */
-    function _deposit(address token, uint256 amount) internal {
         uint256 usdValue = _convertToUSD(token, amount);
         if (totalDeposits + usdValue > bankCapUSD) revert CapExceeded();
 
         vaults[msg.sender][token] += amount;
         totalDeposits += usdValue;
+
+        if (token == NATIVE_TOKEN) {
+            require(msg.value == amount, "ETH mismatch");
+        } else {
+            uint256 allowance = IERC20(token).allowance(msg.sender, address(this));
+            if (allowance < amount) revert InsufficientAllowance();
+            bool success = IERC20(token).transferFrom(msg.sender, address(this), amount);
+            if (!success) revert TransferFailed();
+        }
 
         emit Deposit(msg.sender, token, amount);
     }
@@ -156,12 +140,14 @@ contract KipuBankV2 is AccessControl {
 
         vaults[msg.sender][token] -= amount;
         totalWithdrawals += usdValue;
+        totalDeposits -= usdValue;
 
         if (token == NATIVE_TOKEN) {
             (bool success, ) = msg.sender.call{value: amount}("");
             if (!success) revert TransferFailed();
         } else {
-            IERC20(token).transfer(msg.sender, amount);
+            bool success = IERC20(token).transfer(msg.sender, amount);
+            if (!success) revert TransferFailed();
         }
 
         emit Withdrawal(msg.sender, token, amount);
@@ -183,8 +169,8 @@ contract KipuBankV2 is AccessControl {
      * @return deposits Total de depósitos en USD
      * @return withdrawals Total de retiros en USD
      */
-    function getStats() external view returns (uint256 deposits, uint256 withdrawals) {
-        return (totalDeposits, totalWithdrawals);
+    function getVaultBalance(address user, address token) external view returns (uint256) {
+        return vaults[user][token];
     }
 
     /**
@@ -212,6 +198,21 @@ contract KipuBankV2 is AccessControl {
 
     // ─────── FUNCIONES INTERNAS ─────── //
     /**
+     * @notice Lógica interna para registrar depósitos
+     * @param token Dirección del token depositado
+     * @param amount Monto depositado
+     */
+    function _deposit(address user, address token, uint256 amount) internal {
+        uint256 usdValue = _convertToUSD(token, amount);
+        if (totalDeposits + usdValue > bankCapUSD) revert CapExceeded();
+
+        vaults[user][token] += amount;
+        totalDeposits += usdValue;
+
+        emit Deposit(user, token, amount);
+    }
+
+    /**
      * @notice Convierte un monto de token a su equivalente en USD
      * @dev Si el token es ETH, usa el oráculo Chainlink ETH/USD. Si es USDC, se asume paridad 1:1.
      * @param token Dirección del token a convertir
@@ -227,12 +228,10 @@ contract KipuBankV2 is AccessControl {
 
         if (token == NATIVE_TOKEN) {
             (uint80 roundID, int256 price, , uint256 updatedAt, uint80 answeredInRound) = ethUsdPriceFeed.latestRoundData();
-            if (answeredInRound < roundID || block.timestamp - updatedAt > ORACLE_HEARTBEAT) revert StaleOracleData();
+            if (answeredInRound != roundID || block.timestamp - updatedAt > ORACLE_HEARTBEAT || price <= 0) {
+                revert StaleOracleData();
+            }
             return (normalized * uint256(price) * DECIMAL_FACTOR) / (10 ** 8 * DECIMAL_FACTOR);
-        }
-
-        if (token == USDC) {
-            return normalized;
         }
 
         return normalized;
@@ -246,6 +245,7 @@ contract KipuBankV2 is AccessControl {
      */
     function convertUSDToETH(uint256 usdAmount) external view returns (uint256) {
         (, int256 price,,,) = ethUsdPriceFeed.latestRoundData();
+        require(price > 0, "Invalid price");
         return (usdAmount * 10 ** 8 * (10 ** (18 - USDC_DECIMALS))) / uint256(price);
     }
 }
