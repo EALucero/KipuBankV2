@@ -11,7 +11,7 @@ import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
  * @notice Bóveda multi-token con control de acceso, oráculo Chainlink y contabilidad en USD (Sepolia)
  * @author EALucero
  */
-contract KipuBankV2 is AccessControl {
+contract KipuBankV2 is AccessControl, ReentrancyGuard {
     // ─────── ROLES ─────── //
     /// @notice Rol administrativo con permisos para configurar tokens y parámetros
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
