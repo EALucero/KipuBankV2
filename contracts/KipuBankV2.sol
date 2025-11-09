@@ -169,8 +169,8 @@ contract KipuBankV2 is AccessControl, ReentrancyGuard {
      * @return deposits Total de depósitos en USD
      * @return withdrawals Total de retiros en USD
      */
-    function getVaultBalance(address user, address token) external view returns (uint256) {
-        return vaults[user][token];
+    function getStats() external view returns (uint256 deposits, uint256 withdrawals) {
+        return (totalDeposits, totalWithdrawals);
     }
 
     /**
