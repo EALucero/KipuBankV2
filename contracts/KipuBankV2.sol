@@ -43,7 +43,7 @@ contract KipuBankV2 is AccessControl, ReentrancyGuard {
     mapping(address => mapping(address => uint256)) public vaults; // vaults[user][token]
     /// @notice Mapeo de decimales por token
     mapping(address => uint256) public tokenDecimals; // token => decimals
-    // @notice Total de depósitos realizados
+    /// @notice Total de depósitos realizados
     uint256 public totalDeposits;
     /// @notice Total de retiros realizados
     uint256 public totalWithdrawals;
@@ -65,7 +65,7 @@ contract KipuBankV2 is AccessControl, ReentrancyGuard {
     error TransferFailed();
     /// @notice El monto ingresado es cero, o sea nulo
     error ZeroAmount();
-    // @notice El retiro solicitado supera el límite máximo permitido por transacción
+    /// @notice El retiro solicitado supera el límite máximo permitido por transacción
     error WithdrawalLimitExceeded();
     /// @notice El contrato no tiene suficiente allowance aprobado por el usuario para transferir tokens
     error InsufficientAllowance();
